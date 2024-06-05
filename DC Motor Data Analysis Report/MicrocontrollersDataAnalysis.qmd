@@ -1,0 +1,91 @@
+---
+title: "DC Motorspeed Data Analysis"
+author: "Jax Lubkowitz"
+format: 
+  html:
+    embed-resources: true
+---
+In this experiment we will investigate how to measure a DC motors rotation using an infrared transmitter and receiver. The DC motor is configured with an obstructing fan with 1 pinhole for light to pass through between the transmitter and receiver. This effectively allows one spike of infrared light for each rotation of the fan and thus one rotation of the DC motor. All data from a Arduino DC motor was acquired using a speed write value of 150 and Baud rate of 230400.   
+
+```{r}
+#| echo: false
+#| warning: false
+library(tidyverse)
+library(here)
+library(knitr)
+df <- read_csv(here("data/Microcontrollers Lab Report.csv")) |> 
+  select(Time, Relative_Time, Light) |> 
+  mutate(Relative_Time = Relative_Time/1000000)
+
+ggplot(data = df, aes(x = Relative_Time, y = Light)) +
+  geom_line() +
+  theme(aspect.ratio = .3)+
+  labs(title = "Figure 1: Analog Infrared Light Signal through Time of DC Motor Rotation", 
+       x = 'Time in Seconds', 
+       y = "Analog Light Signal")
+```
+The graph shown in Figure 1. plots the infrared read signal via an analog read pin from infrared transmitter over time. Each peak in the graph represents a time when the fan's pinhole was not obstructing the light between the transmitter and receiver allowing for increased IR signal. This indicates that the distance between each peak is the time it takes for the pinhole to do one rotation. Using this, the rotational speed of the motor can be determined by measuring the distance between peaks. 
+
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
+```{r}
+#| echo: false
+#| warning: false
+peaks_table <- df |> filter(Light > 18) |> filter(Relative_Time != 0.082) |> slice(1:8) |> mutate(Relative_Time = Relative_Time * 1000000) |> select(Relative_Time) |> rename(`Time (microseconds)` = "Relative_Time")
+
+peaks_table$row_number <- seq_along(peaks_table$`Time (microseconds)`)
+peaks_table <- peaks_table |> rename(Cycles = "row_number")
+kable(peaks_table, caption = "Table 1: Time of each Cycle Peak")
+```
+
+Table 1. shows the time of each peak in the infrared receiver values in microseconds. After 268,824 microseconds the DC motor has spun 8 times as seen by the 8 peaks. Between the first and second cycle 38,548 microseconds elapsed and then for the next rotation it took 36,524 microseconds. As the speed of the motor is relatively constant these points can be used to derive how many times the DC motor rotates per second using a linear model. Using this concept the number of rotations in 1 second can be extrapolated from this model. For further modeling purposes, microseconds have been converted to seconds (1:1,000,000). 
+
+```{r}
+#| echo: false
+#| warning: false
+peaks <- df |> filter(Light > 18) |> filter(Relative_Time != 0.082) |> slice(1:8) 
+
+peaks$row_number <- seq_along(peaks$Light)
+
+peaks <- peaks |> rename(Cycles = "row_number")
+
+model <- lm(Cycles ~ Relative_Time, data = peaks)
+
+
+ggplot(data = peaks, aes(y = Cycles, x = Relative_Time)) +
+    geom_smooth(method = "lm", se = FALSE, color = "red") + 
+    labs(title = "Figure 2: Scatter plot of Fan Cycles through Time", 
+         subtitle = "Linear model fit in red: Y = 26.7175X + 0.8232",
+         x = "Time (Seconds)") +
+   geom_point()
+```
+
+By plotting the time of each peak in Figure 2. a linear trend can be seen as the DC motor speed is constant. Overtime the number of cycles completed increases linearly through time. This data can be fitted with a linear line of ```Y = 26.7175X + 0.8232``` where X is time in seconds and Y is the number of Cycles. Our model has adjusted R-squared of 1 and p-value of ```1.399e-15``` indicating an extremely strong linear relationship (which is to be expected as the motor speed is constant). The strength of these values is minorly influenced by loss of significant figure in rounding when converting microseconds to a double data-type of seconds (such as 230976 microseconds converted to .231 seconds) but does not influence the data significantly. From this equation, the number of predicted rotations of this DC motor can be calculated.
+
+<br>
+<br>
+<br>
+**Sample Calculations)**
+
+  Number of Rotations in 5 seconds
+  
+    F(5) = 26.7175(5) + 0.8232
+  
+    = 134.4107 Rotations
+
+  
+  Number of Rotations in 10 seconds
+  
+    F(10) = 26.7175(10) + 0.8232
+    
+    = 267.9982 Rotations
+
+  
+From this equation of ```R = 26.715T + 0.8232``` where R is the number of rotations and T is the time in seconds the speed of the DC motor can be seen in the coefficient 26.715. For every increase of 1 in T, seconds, the number of rotations, R, increased by 26.715. In simpler terms this DC motor was rotating at 26.715 times per second. 
+
+
